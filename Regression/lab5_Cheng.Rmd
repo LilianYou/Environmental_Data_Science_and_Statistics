@@ -1,0 +1,170 @@
+---
+title: "lab5_Cheng"
+author: "Lily Cheng"
+date: "10/31/2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(pwr)
+library(knitr)
+library(kableExtra)
+library(plotly)
+library(extrafont)
+library(ggrepel)
+```
+
+
+First we'll do an F-test for equal variances to see if we can overfide the default Welch approximation.
+```{r}
+# F-test for equal variances
+# 
+chickwts_f <- chickwts %>% 
+  filter(feed == "horsebean" | feed == "linseed") %>% 
+  var.test(weight ~ feed, data = .)
+
+chickwts_f
+
+# Retain the null hypothesis variances are equal
+# override the default in t.test (var.equal = FALSE)
+# t.test()
+
+chickwts_t <- chickwts %>% 
+  filter(feed == "horsebean" | feed == "linseed") %>% 
+  t.test(weight ~ feed, data = ., var.equal = TRUE)
+
+chickwts_t
+
+## OR:
+
+#chick_simple <- chickwts %>% 
+ # var.test(weight ~ feed, data = .)  # something wrong with the lines
+
+#t_test <- chick_simple %>% 
+ # t.test(weight ~ feed, data = ., var.equal = TRUE)
+
+#t_test
+
+chick_simple <- chickwts %>% 
+  filter(feed == "horsebean" | feed == "linseed")
+
+f_test <- chick_simple %>% 
+  var.test(weight ~ feed, data = .)
+
+t_test <- chick_simple %>% 
+  t.test(weight ~ feed, data = .)
+
+t_test
+```
+p value means, if there is no difference between the two population, that the probability of the two mean are different is p.
+
+Mean weights of chickens fed horsebean (mean sd) and linseed (mean sd) differ significantly (t(`r chickwts_t$parameter`) = `r
+round(chickwts_t$statistic,2)`, *p* = `r round(chickwts_t$p.value, 3)`, $\alpha$=0.05).
+
+### Part2. Power analysis
+
+We need to collect samples to test a hypothesis (planning on doing a 2-sample t-test) to see if there is a difference in means for phosphate concentrations in lagoons downstream from golf courses of NOT downstream from golf courses. 
+
+* A priori* power analysis: give you an estimate of how many observations you'll need to collect (really useful for justifying budgets, etc. for proposals)
+
+- n: sample size
+- power: power
+- sig.level: alpha
+_ d: effect size (Cohen's *d*)
+
+Find n for "small" effect size (~0.2), and a "large" effect size (~0.8) as endpoints for n estimations
+
+```{r}
+# A priori power analysis
+
+# How many samples needed if there is a SMALL effect size, and alpha = 0.05. power = 0.80
+
+power_small <- pwr.t.test(n = NULL, power = 0.8, sig.level = 0.05, d = 0.2)
+power_small
+
+power_large <- pwr.t.test(n = NULL, power = 0.8, sig.level = 0.05, d = 0.8)
+power_large
+
+```
+###Part3. Piping into ggplot
+
+```{r}
+mortality <- read_csv("drug_mortality.csv")
+income <- read_csv("state_income.csv")
+```
+
+```{r}
+mortality_1 <- mortality %>% 
+  filter(ages == "All Ages",
+         sex == "Both Sexes",
+         race_and_hispanic_origin == "All Races-All Origins",
+         state != "United States") %>% 
+  select(year, state:death_rate)
+
+m15 <- mortality_1 %>% 
+  filter(year == 2015) %>% 
+  mutate(highlight = ifelse(state == "Kentucky", "Yes", "No")) %>% 
+  arrange(-death_rate) %>% 
+  head(10) %>% 
+  ggplot(aes(x = reorder(state, -death_rate), y = death_rate))+
+  geom_col(aes(fill = highlight))+
+  scale_fill_manual(values = c("gray60", "red"))
+
+m15
+
+ggplotly(m15)
+
+# graph_1
+```
+
+###4. Interactive bubble plot
+
+We'll use full_join (dyplyr) - this means that you retain ALL observations, even if the level only exists in one of the data frames
+
+```{r}
+View(mortality_1)
+mi_2015 <- full_join(mortality_1, income) %>% 
+  filter(year == 2015)
+
+graph_3 <-  ggplot(filter(mi_2015, med_income > 60000), 
+         aes(x = med_income,
+             y = death_rate,
+             label = state))+
+  geom_point()+
+  geom_text_repel()
+
+graph_3 <-  ggplot(filter(mi_2015), 
+         aes(x = med_income,
+             y = death_rate,
+             label = state))+
+  geom_point(aes(size = population, color = state), alpha = 0.4)+
+  geom_text_repel(size = 3)+
+  theme(legend.position = "NA")
+
+graph_3
+
+ggplotly(graph_3)
+```
+
+### Part5. table using kable/kableExtra
+
+```{r}
+ca_table <- mortality_1 %>% 
+  filter(year >= 2010,
+         state == "California")
+
+ca_table
+
+ca_final <- kable(ca_table) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+ca_final
+```
+
