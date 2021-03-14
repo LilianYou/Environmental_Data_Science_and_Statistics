@@ -1,2 +1,2 @@
-Datasets: Drug mortality, state income
-Packages:
+Datasets: Drug mortality, state income <br>
+Packages: pwr, plotly, etc.
