@@ -1,0 +1,151 @@
+---
+title: "Lab4"
+author: "Lily Cheng"
+date: "10/24/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+suppressMessages(library(tidyverse))
+library(effsize)
+library(pwr)
+library(knitr)
+```
+
+```{r}
+nc_births <- read_csv("nc_birthweights.csv")
+View(nc_births)
+```
+
+```{r}
+nc_new <- nc_births %>% 
+  mutate(
+    sdp = case_when(
+      smoke == 0 ~"nonsmoker",
+      smoke == 1 ~ "smoker"
+    )
+  ) %>% 
+  filter(sdp != "NA") %>% 
+  select(sdp, gained, weeks, tpounds)
+```
+
+###3. Bubbleplot in ggplot
+
+A bubbleplot is just a scatterplot graph where the size of the points depend on the value of a selected variable.
+three steps in making plots
+1 tell it we are using ggplot 2 tell it where we put the data 3 tell it what type of plot we want it to make
+
+```{r}
+bw_scatter <- ggplot(nc_new, aes(x = weeks, y = tpounds)) +
+  geom_point(aes(color = sdp, size = gained), alpha = 0.5)+
+  labs(x = "Weeks at birth", y = "Birthweight (pounds)")+
+  scale_color_manual(values = c("purple", "orange"), name = "Smoking Status")+
+  scale_size_continuous(name = "Weight Gain")
+
+
+bw_scatter
+```
+
+####Histograrms and qq-plots
+
+Create side-by-side histograms (hint: facet_wrap) for observations of baby weight pregnancy. geom_histogram: one variable (x = )
+
+```{r}
+# creating exploratory histogram of birthweights
+bw_hist <- ggplot(nc_new, aes(x = tpounds))+
+  geom_histogram(aes(fill=sdp))+
+  facet_wrap(~ sdp, scale = "free")
+
+bw_hist
+
+# craete exploratory qq plots
+bw_qq <- ggplot(nc_new, aes(sample=tpounds))+
+  geom_qq()+
+  facet_wrap(~sdp, scale = "free")
+
+bw_qq
+
+# Summary table of mean, sd, max, min
+
+birth_summary <- nc_new %>% 
+  group_by(sdp) %>% 
+  summarize(
+    mean_wt = mean(tpounds),
+    sd_wt = sd(tpounds),
+    max_wt = max(tpounds)
+  )
+
+birth_summary
+```
+
+###4. Two-sample t-tests
+
+Use the pull() function to extract column information as a VECTOR
+```{r}
+# create a subset from nc_new data that only contains observations for babies born to smoking mothers, and then pulls JUST the "tpounds" column as a vector
+
+s <- nc_new %>% 
+  filter(sdp == "smoker") %>% 
+  pull(tpounds)
+
+# creating a vector containing only birthwieghts for babies born to nonsmoking mothers "ns".
+
+ns <- nc_new %>% 
+  filter(sdp == "nonsmoker") %>% 
+  pull(tpounds)
+```
+
+Is there a significant difference in birthweights for babies born to smoking and nonsmoking mothers?
+
+```{r}
+
+# H0: Means are equal (difference in means = 0)
+# HA: Means are NOT equal (difference in means is NOT 0)
+
+# First, let's check for equal variance
+# F: ratio of sample variances
+# H0: Ratio of variance = 1
+# HA: Ratio of variance is NOT = 1
+
+# performing an F-test for equal variances
+f_test <- var.test(s, ns)
+f_test # p = 0.197, variances are equal
+
+
+```
+
+# we are going to override the default var.equal = TRUE in the 
+
+
+```{r}
+t_diff <- t.test(s, ns, var.equal = TRUE)
+t_diff
+
+# If I ask "Are babies born to smoking mothers significantly smaller (in birthweight) than those born to nonsmoking mothers?"
+
+t_less <- t.test(s, ns, var.equal = TRUE, alternative = "less")
+t_less 
+
+# t_more <- t.test(ns, s, var.equal = TRUE, alternative = "greater")
+
+```
+
+LaTex
+Inline referencing examples:
+
+(t(df) = ??, p = ??, alpha = 0.05)
+
+... weights differed significantly (t(`r{t_diff$parameter}`)=`r{round(t_diff$statistic,2)}`, *p* = `r {t_diff$p.value}`, $\alpha$)
+
+###5. Effect size (Cohen's *d*)
+
+```{r}
+effect_size <- cohen.d(ns,s)
+effect_size
+```
+
+
