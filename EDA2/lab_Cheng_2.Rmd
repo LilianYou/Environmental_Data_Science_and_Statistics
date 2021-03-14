@@ -1,0 +1,158 @@
+---
+title: "Cheng_Lab2_Session2"
+author: "Lily Cheng"
+date: "10/17/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+suppressMessages(library(tidyverse))
+library(ggpubr)
+```
+
+two conditions for z distribution: population standard distribution, population normal distribution (n>30, normally have normal distribution, can use t distribution.)
+
+
+Part2. Proababilities for the Z-distribution
+
+*pnorm*: Calculates the probability associated with an input value for a random variable
+
+*qnorm*: Calculates the value of the random associated with an input probability
+
+We're told the following:
+
+The population distribution for cat weights (pounds) is normally distributed with a mean of 9.2 pounds and a sd of 1.4 pounds.
+
+What is the probability of randomly selecting a cat from that population that:
+
+- weighs less than 8 pounds?
+- weights more than 10 pounds?
+- weights between 9 and 12 pounds?
+
+```{r}
+cat_mean <- 9.2 # mean cat population weight (pounds)
+cat_sd <- 1.4 # SD population weight (pounds)
+
+# probability of a cat <8 pounds?
+p_less_8 <- pnorm(8, mean = cat_mean, sd = cat_sd)
+
+# the probability of randomly selecting a cat from this population that weighs less than 8 pounds is 0.196
+
+# Probability of a cat > 10 pounds?
+p_norm_10 < pnorm(10, mean = cat_mean, sd = cat_sd, lower.tail = FALSE)
+
+# probability of randomly selecting a cat weighing more than 10 pounds is 0.284.
+
+# What is the probability of randomly selecting a cat that weighs between 9 and 12 pounds?
+
+p_norm_9_12 <- pnorm(12, mean = cat_mean, sd = cat_sd) - pnorm(9, mean = cat_mean, sd = cat_sd)
+
+# There is a 0.53 probability of randomly selecting a cat weighing between 9 and 12 pounds from this population.
+
+
+# What is the probability of randomly selecting a cat that weighs more than 13 pounds?
+
+p_norm_13 <- pnorm(13, mean = cat_mean, sd = cat_sd, lower.tail = FALSE)
+
+```
+
+The probability of randomly selecting a cat that weighs less than 8 pounds is `r {p_less_8}`
+
+
+How can we find values of a random variable associated with a specified percentile?
+
+Use *qnorm*
+
+At what weight would a cat be at the 80th percentile in weight for the population?
+
+```{r}
+cat_80 <- qnorm(0.8, mean = cat_mean, sd = cat_sd)
+# a cat weighing 10.4 pounds is at the 80th percentile in weight for population.
+
+# Between the 40th and 60th percentile, what are the endpoints at that range?
+
+cat_60 <- qnorm(0.6, mean = cat_mean, sd = cat_sd) 
+cat_40 <- qnorm(0.4, mean = cat_mean, sd = cat_sd)
+```
+
+## part3. T-distribution for confidence intervals and hypothesis testing
+
+We'll be using the *t.test* function for all of it.
+
+using dataset "iris" built in R based package.
+
+### a. Go exploring (histogram and qq-plots with facet wrap)
+
+```{r}
+iris_hist <- ggplot(iris, aes(x = Petal.Length)) +
+  geom_histogram(aes(fill = Species))+
+  facet_wrap(~ Species, scales = "free") + # if there are two variables we are intested in e.g.     facet_wrap(State ~ Species)
+  theme_classic()
+
+iris_hist
+
+# geom_qq, aes(sample = )
+
+iris_qq <- ggplot(iris, aes(sample = Petal.Length))+
+  geom_qq(aes(color = Species))+
+  facet_wrap(~ Species)
+iris_qq
+```
+
+Create a dataset of the "iris" datasets that only includes the setosa irises, only keep the column for petal length, rename that column to "length"
+
+```{r}
+setosa_petals <- iris %>%
+  filter(Species == "setosa") %>% 
+  select(Petal.Length) %>% 
+  rename(length = Petal.Length)
+
+mean_length <- mean(setosa_petals$length)
+mean_length # 1.462 cm
+
+```
+
+```{r}
+iris_ci <- t.test(setosa_petals$length)
+iris_ci
+
+```
+I see a claim that the mean length of setosa iris petals is 1.5 cm. I want to test claim using Edgar Anderson's sample
+
+Two-sided:
+
+H0: Mean = 1.5 cm
+HA: Mean is not 2.5 cm
+
+```{r}
+iris_t_1 <- t.test(setosa_petals$length, mu = 1.5)
+iris_t_1
+```
+
+Claim: Mean length is 1.5 cm.
+You think: Mean length is less than 1.5 cm.
+
+One-sided test:
+H0: Mean is not less than 1.5 cm
+
+```{r}
+
+t_test_oneway <- t.test(setosa_petals$length, mu = 1.5, alternative = "less") # alternative define a one tail test, then the confidence interval does not make sense, because it just goes infinite to one direction. It has to be tail to have confidence interval
+t_test_oneway
+```
+
+## Part4. Two-Sample T-test
+
+```{r}
+flint <- read.cs("")
+
+flint_t <- t.test(flint$pb_1, flint_t$pb_3, paired = TRUE)
+flint_t
+
+# lead concentrations after initial sampling (mean = ??) after 2min of flushing water lines (near = ??) differ significantly (t(270) = 6.37, p < 0.001)
+```
+
