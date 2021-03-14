@@ -1,0 +1,250 @@
+---
+title: "ESM 206 Lab 10"
+author: "YOUR NAME HERE"
+date: "December 3, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Lab 10 Objectives:
+
+- Correlation matrices
+- Binary logistic regression
+- Dates/times with lubridate
+- Heatmap of solar irradiation in Santa Barbara, Hilo (HI), and Fairbanks (AK) in 2010
+- Aquaculture with gganimate
+
+# PART 0. Load libraries
+```{r packages}
+
+library(tidyverse) # The tidyverse!
+library(corrplot) # For correlation matrices
+library(janitor) # For cleaning up column names
+library(lubridate) # For dealing with dates & times
+library(gganimate) # For adding animation to ggplot graphics
+library(ggimage) # For updating graph components with images
+
+
+```
+
+# PART 1. Correlation matrix (World Bank world environmental factors data)
+
+Compiled World Bank data, accessed from: https://www.kaggle.com/zanderventer/environmental-variables-for-world-countries#World_countries_env_vars.csv
+
+- Read in the "world_env_vars.csv file" as env_var
+- Find correlations between all variables, columns 2:28
+- Plot the correlation matrix (corrplot)
+
+```{r env_corr}
+# Read in the 
+env_var <- read.csv("world_env_vars.csv") %>% 
+  na.omit
+# correlation
+
+cor_df <- cor(env_var[2:28])
+
+# Make a correlation Matrix
+
+corrplot(cor_df,
+         type = "upper",
+         method = "ellipse",
+         tl.col = "black",
+         tl.cex = 0.5)
+
+# the narrower the ellipse, the darker the color, the stronger the correlation
+
+```
+
+# PART 2. Binary Logistic Regression (Donner Party Data)
+
+Use the 'glm' function for fitting *generalized linear models* (the *logit* - log odds of survival, in our case, will be linearly related to Sex and Age. So we expect the final model to look something like this: 
+
+$$Log Odds (Survival) = \beta_0 + \beta_1(Age) + \beta_2(Sex)$$
+
+We'll use 'family = binomial' to run binomial logistic regression...otherwise, this looks very similar to other types of regression we've already done. 
+
+a. Read in the DonnerTable.csv file as DonnerTable
+
+```{r donner_data}
+DonnerTable <- read.csv("DonnerTable.csv")
+
+```
+
+b. Binomial logistic regression
+
+```{r blr}
+donner_blr <- glm(Outcome ~ Sex + Age, family = "binomial", data = DonnerTable)
+summary(donner_blr)
+```
+
+c. Use the model to answer: What are the log odds of survival for a 5 year-old female? The probability of survival?
+
+```{r predict_f_5}
+
+# 1. Create a data frame with variables Sex and Age, containing data "Female" and 5, respectively: 
+
+f_5 <- data.frame(Sex = "Female", Age = 5)
+
+# 2. Find the log odds of survival for the new data (5 year old female) using predict() function with type = "link":
+
+f_5_logodds <- predict(donner_blr, newdata = f_5, type = "link")
+f_5_logodds
+
+# 3. Exponentiate the log odds to find ODDS of survival for a 5 year old female:
+
+f_5_odds <- exp(f_5_logodds)
+
+# Ask: Could we manually find the probability of survival for a 5-year old female? recall: p/(1-p) = ODDS
+
+
+
+# 4. Actually, let's just use type = "response" in the predict function, which converts to a probability for us:
+
+f_5_prob <- predict(donner_blr, newdata = f_5, type = "response")
+# ~ 81%
+
+```
+
+d. What is the probability of survival for a 25 year-old male? 
+
+```{r predict_m_25}
+
+# Similarly:
+
+m_25 <- data.frame(Sex = "Male", Age = 25) # Make a new data frame
+
+m_25_prob <- predict(donner_blr, newdata = m_25, type = "response") # Find probability of survival
+m_25_prob
+
+```
+
+e. Create new sequences of data so that we can graph probabilities for the entire spectrum of ages, designated by sex.
+
+```{r new_data}
+
+seq_age <- rep(seq(from = 0, to = 100), 2) # Create a sequence from 0 to 100, twice (one will be "Male" and one will be "Female")
+
+f_101 <- rep("Female", 101) # Repeat 'Female' 101 times (to match years data)
+m_101 <- rep("Male", 101) # Repeat 'Male' 101 times
+mf_101 <- c(f_101, m_101) # Combine them into a single vector
+
+# Combine the age and sex sequences into a single data frame - that will be the new data that we have our model make predictions for
+
+donner_newdata <- data.frame(seq_age, mf_101) # MUST make column names match variables in the model!
+colnames(donner_newdata) <- c("Age","Sex")
+
+```
+
+f. Now that we have new data to put into our model to have it make predictions, let's go ahead and actually find the predicted probabilities for each Age/Sex combination.
+
+```{r donner_predict}
+
+# Find probabilities using predict (with type = "response"). Include SE.
+
+predicted_probs <- predict(donner_blr, newdata = donner_newdata, type = "response", se.fit = TRUE)
+# Coerce outcome into data frame. 
+
+graph_data <- data.frame(donner_newdata, predicted_probs$fit, predicted_probs$se.fit)
+colnames(graph_data) <- c("Age", "Sex", "Probability", "SE")
+```
+
+g. Graph results.
+
+```{r donner_graph}
+ggplot(graph_data, aes(x = Age, y = Probability))+
+  geom_line(aes(color = Sex))+
+  geom_ribbon(aes(ymin = Probability - SE, ymax = Probability + SE, fill = Sex), alpha = 0.4)
+
+# geom_ribbon is recommended when there is non-linear variable
+
+```
+
+
+# PART 3. Solar irradiation at the 3 locations in 2010 (pull in all together, do some lubridate stuff, etc.)
+
+a. Read in multiple solar irradiation files (for SB (CA), Hilo (HI), and Fairbanks (AK)):
+```{r solar_data}
+
+si_full <- list.files(pattern = "solar_irradiation_*") %>% 
+  map_df(~read_csv(.)) %>% 
+  clean_names
+
+```
+
+b. Wrangle the data
+```{r wrangle_solar}
+
+solar_tidy <- si_full %>% 
+  rename(sol_rad = etr_wh_m_2,
+         date = yyyy_mm_dd,
+         time = hh_mm_lst) %>% 
+  filter(time != "NA") %>% 
+  mutate(site = fct_relevel(site, "Hawaii", "Santa Barbara", "Alaska"))
+
+```
+
+c. Use lubridate() functions to convert to times/dates
+```{r date_time}
+solar_tidy$date <- mdy(solar_tidy$date) 
+solar_tidy$date <- hms(solar_tidy$time) 
+
+```
+
+d. Make an awesome figure of solar irradiation (heat/tile map)
+```{r solar_graph}
+solar_gg <- ggplot(solar_tidy, aes(x = date, y = time))+
+  geom_tile(aes(fill = sol_rad)) + 
+  scale_fill_gradientn(colors = c("royalblue2", "mediumorchid1", "orange", "yellow"))+
+  scale_y_time()+
+  facet_wrap(~site, ncol = 1)
+
+solar_gg
+
+
+```
+
+
+#PART 4. gganimate example: total aquaculture production (metric tons) for United States, Brazil, Chile, and Ecuador
+
+a. Get the data, and do some wrangling:
+```{r aqua_data}
+aq_df <- read_csv("aq_wb.csv")
+
+aq_tidy <- aq_df %>% 
+  filter(country == "Brazil"|
+           country == "Chile"|
+           country == "United States"|
+           country == "China") %>% 
+  gather(year, aq_prod, `1960`:`2016`) %>% 
+  filter(year >= 1990) %>% 
+  mutate(aq_mil = aq_prod/1000000) %>% 
+  select(country, year, aq_mil)
+
+
+```
+
+
+b. Read in the fish.png as 'fish'
+
+```{r fish_image}
+fish <- "fish.png"
+
+```
+
+c. Make a graph...with gganimate!
+```{r gganimate_fish}
+aq_plot <- ggplot(aq_tidy, aes(x = as.numeric(year), y = aq_mil, group = country)) +
+  geom_line(aes(color = country))+
+  geom_image(aes(image = fish)) +
+  geom_text(aes(label = country, color = country), position = position_nudge(y = 0.04, x = 1), size =5) +
+  transition_reveal(country, as.numeric(year))
+
+aq_plot
+animate(aq_plot, nframes = 24, renderer =
+          gifski_renderer("aq_animate.gif"))
+```
+
+##END LAB
