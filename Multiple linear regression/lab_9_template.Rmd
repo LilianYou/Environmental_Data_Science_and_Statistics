@@ -1,0 +1,267 @@
+---
+title: "Lab 9 - Multiple Linear Regression"
+author: "ENTER YOUR NAME HERE"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Use this template to follow along in Lab Week 9. Each code chunk you'll need is already created and named. 
+
+**Lab 9 Objectives:**
+
+- Explore multivariate data (SLO housing prices)
+- Perform multiple linear regression
+- Assess diagnostics
+- Compare different models by AIC
+- Explain model outputs
+- Make a nice table of regression results
+- Make predictions using a final model
+- Visualize predictions with original data
+
+###1. Load packages
+
+- tidyverse
+- stargazer
+
+```{r packages, include = FALSE}
+
+# a. Load packages 'tidyverse' and 'stargazer':
+
+library(tidyverse)
+library(stargazer)
+library(plotly)
+
+```
+
+###2. Load data (slo_homes.csv) as a df called 'homes', then filter to create a data frame called 'homes_sub' that only include homes in SLO, Arroyo Grande, Santa Maria-Orcutt, and Atascadero
+
+```{r get_data, include = FALSE}
+
+# a. Read in data as 'homes':
+homes <- read_csv("slo_homes.csv")
+
+
+# b. Filter to only include cities "San Luis Obispo", "Santa Maria-Orcutt", "Atascadero", and "Arroyo Grande", and call this new subset 'homes_sub':
+homes_sub <- homes %>% 
+  filter(City == "San Luis Obispo"|City == "Santa Maria-Orcutt"|City == "Atascadero"|City == "Arroyo Grande")
+
+
+```
+
+###3. Go exploring (visual) + think critically about variables
+
+*Note: It's OK to LOOK at things separately, even if you're including all in a model together!*
+
+Example: if we want to compare distribution of housing prices by CITY (ignoring all other variables), we can do that:
+
+```{r by_city}
+
+# a. Calculate mean price by city
+mean_by_city <- homes_sub %>% 
+  group_by(City) %>% 
+  summarize(
+    mean = mean(Price)
+  )
+
+# b. Visualize prices by city
+by_city <- ggplot(homes_sub, aes(x = Price)) +
+  geom_density(aes(color = City, fill = City), alpha = 0.3) + # Note: just to show what the geom_violin shows
+  theme_classic() +
+  scale_x_continuous(expand = c(0,0), limits = c(0,3e6)) +
+  scale_y_continuous(expand = c(0,0)) +
+  labs(x = "Home Prices (USD)", y = "Density")
+
+#by_city
+
+ggplotly(by_city)
+
+```
+
+Or another question: Overall relationship between home square footage and price, separated by City? 
+
+```{r by_sqft}
+
+# a. Relationship between square footage and price
+by_sqft <- ggplot(homes_sub, aes(x = SqFt, y = Price)) +
+  geom_point(aes(color = City, pch = Status), alpha = 0.5) +
+  facet_wrap(~Status)
+
+by_sqft
+
+# Observations here: Does relationship appear ~ linear? Anything else we can pick out re: trends, outliers, etc.? What is the general trend? Any outliers? Is there reason enough for us to omit it?
+
+```
+
+###4. Multiple linear regression
+
+Multiple linear regression in R follows the same syntax we've been using so far: 
+
+    lm(y ~ x1 + x2 + x3..., data = df_name)
+    
+Let's try this model a couple of different ways: 
+
+(1) Use all available variables (saturated model) 
+(2) Use only SqFt as a predictor for "home size" generally (omit Bathrooms and Bedrooms), and omit PricePerSqFt (since it's derived from two other existing variables in the model)
+
+Use summary() to view the model output and statistics.
+
+```{r saturated}
+
+# a. Saturated model: 
+
+homes_lm1 <- lm(Price ~ City + Bedrooms + SqFt + PricePerSqFt + Status, data = homes_sub)
+
+# b. Model summary:
+summary(homes_lm1)
+```
+
+The next model: Exclude price per square foot, and bedrooms/bathrooms (since these are largely explained by square footage...)
+
+```{r subset}
+
+# a. Updated model with variables City, SqFt, and Status:
+homes_lm2 <- lm(Price ~ City + SqFt + Status, data = homes_sub)
+# b. Model summary:
+summary(homes_lm2)
+```
+
+Wait...but what if I wanted everything to be with respect to a Regular sale status? Then I need to change my factor levels. We've done this before, here we'll use a different function (fct_relevel) from *forcats* package in the tidyverse. 
+
+```{r fct_relevel}
+
+# a. Set Status to class 'factor'
+
+homes$Status <- factor(homes$Status)
+# b. Check to ensure it's a factor now
+
+
+# c. Check levels:
+
+
+# d. Reassign reference level of "Status" to "Regular":
+
+
+# e. Now run the regression again - same equation, but now the reference level is different (Status = Regular): 
+homes_sub$Status <- fct_relevel(homes_sub$Status, "Regular")
+
+homes_lm3 <- lm(Price ~ City + SqFt + Status, data = homes_sub)
+summary(homes_lm3)
+```
+
+Interpret the coefficients and statistical outcomes above. 
+Notes: 
+
+###5. Model diagnostics
+
+Remember, since we're concerned about *residuals* (distance that actual observations exist from model predictions), we can only evaluate some assumptions *after* running the regression. 
+
+Then we can evaluate model diagnostics using the plot() function:
+
+```{r diagnostics}
+
+# a. Model diagnostics:
+plot(homes_lm3)
+
+```
+
+###6. Model comparison by Akaike Information Criterion
+
+The AIC is a quantitative metric for model "optimization" that balances complexity with model fit. The best models are the ones that fit the data as well as possible, as simply as possible. Recall: lower AIC value indicates a *more optimal* balance - **BUT STATISTICS IS NO SUBSTITUTE FOR JUDGEMENT!!!**
+
+```{r AIC}
+
+# a. AIC values for each model # absolute AIC value means nothing, it's only valuable when it's looked as a comparative tool
+full_aic <- AIC(homes_lm1)
+final_aic <- AIC(homes_lm3)
+
+# Answer: which would you pick? 
+
+```
+
+###7. Regression tables with *stargazer*
+
+```{r stargazer, results = 'asis'}
+
+# a. Prepare a nice regression table:
+stargazer(homes_lm1, homes_lm3, type = "html")
+
+
+# Note: If you want to work with this in Word, save to html, open, copy and paste into Word. 
+
+```
+
+###8. Making predictions
+
+Using your final selected model, predict the housing price for a range of home sizes, sale status, and city. 
+
+The predict() function uses the following syntax:
+
+      predict(model_name, newdata = new_data_name)
+      
+Defaults are to exclude the prediction SE and mean confidence interval - if you want to include, use arguments
+
+      se.fit = TRUE
+      interval = "confidence" 
+      interval = "prediction"
+
+First, you need to create a new data frame of values that contain ALL NECESSARY VARIABLES **with the same variable names AND level strings**.
+
+```{r df_new}
+
+# First, make a new data frame
+
+# Note that the df_new created below has the SAME variable names and level strings as the original model data (otherwise R won't know how to use it...)
+# Work through this on your own to figure out what it actually does:
+
+df_new <- data.frame(City = rep(c("San Luis Obispo",
+                                  "Santa Maria-Orcutt",
+                                  "Atascadero",
+                                  "Arroyo Grande"), 
+                                each = 60), 
+                     SqFt = rep(seq(from = 500,
+                                    to = 3500, 
+                                    length = 20), 
+                                times = 12), 
+                     Status = rep(c("Regular",
+                                    "Foreclosure",
+                                    "Short Sale"), 
+                                  times = 12, 
+                                  each = 20))
+
+```
+
+Make predictions for the new data using predict():
+
+```{r predict}
+
+# a. Make predictions using the new data frame:
+price_predict <- predict(homes_lm3, newdata = df_new, se.fit = TRUE, interval = "confidence")
+
+# b. Bind predictions to the data to make it actually useful:
+
+predict_df <- data.frame(df_new, price_predict)
+
+```
+
+Then visualize it!
+
+```{r graph, echo = FALSE}
+
+# Create a line graph with square footage on the x-axis, predicted price on y-axis, with color dependent on City and facet_wrapped by sale status (follow along):
+
+predict_graph <- ggplot(predict_df, aes(x = SqFt, y = fit.fit))+ geom_line(aes(color = City)) +
+  geom_point(data = homes_sub, aes(x = SqFt, y = Price), alpha = 0.5)+
+  facet_wrap(~Status)+
+  labs(x = "Home Size (Sq.Ft)", y = "Predicted Home Price($)")+
+  scale_x_continuous(limits = c(500, 3500), breaks = seq(500, 3500, by = 1000))+
+  scale_y_continuous(limits = c(0, 1.5e6))
+  theme_light()
+
+predict_graph
+```
+
+END LAB
